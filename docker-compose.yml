@@ -1,0 +1,73 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: birthday-postgres
+    environment:
+      POSTGRES_DB: birthday_notifications
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Birthday Notification Service
+  birthday-service:
+    build: .
+    container_name: birthday-service
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: birthday_notifications
+      DB_USER: postgres
+      DB_PASSWORD: password
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-server:8080/webhook}
+      SCHEDULER_TIMEZONE: UTC
+      BIRTHDAY_NOTIFICATION_HOUR: 9
+      BIRTHDAY_NOTIFICATION_MINUTE: 0
+      RECOVERY_CHECK_INTERVAL_MINUTES: 60
+      MAX_RETRY_ATTEMPTS: 3
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      webhook-server:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Webhook Server for Testing
+  webhook-server:
+    image: node:18-alpine
+    container_name: webhook-server
+    working_dir: /app
+    command: node webhook-server.js
+    volumes:
+      - ./webhook-server.js:/app/webhook-server.js
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
