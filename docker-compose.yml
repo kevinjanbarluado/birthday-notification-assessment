@@ -55,9 +55,10 @@ services:
     image: node:18-alpine
     container_name: webhook-server
     working_dir: /app
-    command: node webhook-server.js
+    command: sh -c "npm install express && node webhook-server.js"
     volumes:
       - ./webhook-server.js:/app/webhook-server.js
+      - ./package.json:/app/package.json
     ports:
       - "8080:8080"
     restart: unless-stopped
